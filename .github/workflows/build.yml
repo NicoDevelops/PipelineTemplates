@@ -1,0 +1,75 @@
+name: Reusable Build & Release (Windows)
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
+
+    - name: Bestimme Version
+      id: version
+      shell: pwsh
+      run: |
+        $ref = "${{ github.ref }}"
+        $repo = "${{ github.event.repository.name }}"
+        $runNumber = "${{ github.run_number }}"
+        if ($ref -like 'refs/tags/*') {
+          $version = $ref -replace 'refs/tags/v', ''
+        }
+        else {
+          $lastTag = (git describe --tags --abbrev=0) -replace '^v', ''
+          $version = "$lastTag.$runNumber"
+        }
+        echo "VERSION=$version" >> $env:GITHUB_ENV
+        Write-Host "Version: $version"
+
+    - name: Setze Version in allen csproj
+      shell: pwsh
+      run: |
+        Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object {
+          (Get-Content $_.FullName) `
+            -replace '<Version>.*</Version>', "<Version>$env:VERSION</Version>" `
+            | Set-Content $_.FullName
+        }
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration Release --no-restore
+
+    - name: Test
+      run: dotnet test --configuration Release --no-build --verbosity normal
+
+    - name: Publish
+      run: dotnet publish --configuration Release --no-build -o ./publish
+
+    - name: Upload Artifact (Actions)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.github_repository_name }}-${{ env.VERSION }}
+        path: ./publish
+
+    - name: Zip Publish Folder
+      if: ${{ startsWith(inputs.github_ref, 'refs/tags/') }}
+      run: powershell Compress-Archive -Path ./publish/* -DestinationPath "./${{ inputs.github_repository_name }}-${{ env.VERSION }}.zip"
+
+    - name: Upload to GitHub Release
+      if: ${{ startsWith(inputs.github_ref, 'refs/tags/') }}
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ./${{ inputs.github_repository_name }}-${{ env.VERSION }}.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
