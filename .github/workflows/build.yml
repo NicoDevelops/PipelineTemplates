@@ -2,6 +2,9 @@ name: Reusable Build & Release (Windows)
 
 on:
   workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
 
 jobs:
   build:
@@ -59,17 +62,17 @@ jobs:
     - name: Upload Artifact (Actions)
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ inputs.github_repository_name }}-${{ env.VERSION }}
+        name: ${{ github.event.repository.name }}-${{ env.VERSION }}
         path: ./publish
 
     - name: Zip Publish Folder
-      if: ${{ startsWith(inputs.github_ref, 'refs/tags/') }}
-      run: powershell Compress-Archive -Path ./publish/* -DestinationPath "./${{ inputs.github_repository_name }}-${{ env.VERSION }}.zip"
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      run: powershell Compress-Archive -Path ./publish/* -DestinationPath "./${{ github.event.repository.name }}-${{ env.VERSION }}.zip"
 
     - name: Upload to GitHub Release
-      if: ${{ startsWith(inputs.github_ref, 'refs/tags/') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
       uses: softprops/action-gh-release@v2
       with:
-        files: ./${{ inputs.github_repository_name }}-${{ env.VERSION }}.zip
+        files: ./${{ github.event.repository.name }}-${{ env.VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
