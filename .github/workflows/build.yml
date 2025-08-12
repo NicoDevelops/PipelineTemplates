@@ -2,7 +2,9 @@ name: Reusable Build & Release (Windows)
 
 on:
   workflow_call:
-
+    secrets:
+      PAT_TOKEN:
+        required: true
 jobs:
   build:
     runs-on: windows-latest
