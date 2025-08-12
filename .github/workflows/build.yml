@@ -73,3 +73,10 @@ jobs:
         files: ./${{ github.event.repository.name }}-${{ env.VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Push NuGet to GitHub Packages
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        dotnet nuget push "**/*.nupkg" \
+          --api-key ${{ secrets.GITHUB_TOKEN }} \
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
