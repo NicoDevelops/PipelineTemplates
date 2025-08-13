@@ -8,6 +8,7 @@ on:
         description: 'Version of .NET SDK to use'
         required: false
         default: '9.0.x'
+        type: string
     secrets:
       PAT_TOKEN:
         required: true
