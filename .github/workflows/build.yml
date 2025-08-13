@@ -1,10 +1,17 @@
+# PipelineTemplates/.github/workflows/build.yml
 name: Reusable Build & Release (Windows)
 
 on:
   workflow_call:
+    inputs:
+      dotnet_version:
+        description: 'Version of .NET SDK to use'
+        required: false
+        default: '9.0.x'
     secrets:
       PAT_TOKEN:
         required: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -18,26 +25,22 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: ${{ inputs.dotnet_version }}
 
-    - name: Bestimme Version
+    - name: Get version from git
       id: version
       shell: pwsh
       run: |
-        $ref = "${{ github.ref }}"
-        $repo = "${{ github.event.repository.name }}"
-        $runNumber = "${{ github.run_number }}"
-        if ($ref -like 'refs/tags/*') {
-          $version = $ref -replace 'refs/tags/v', ''
-        }
-        else {
+        if ($env:GITHUB_REF -like 'refs/tags/*') {
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+        } else {
           $lastTag = (git describe --tags --abbrev=0) -replace '^v', ''
-          $version = "$lastTag.$runNumber"
+          $version = "$lastTag.$env:GITHUB_RUN_NUMBER"
         }
         echo "VERSION=$version" >> $env:GITHUB_ENV
         Write-Host "Version: $version"
 
-    - name: Setze Version in allen csproj
+    - name: Set version in all csproj
       shell: pwsh
       run: |
         Get-ChildItem -Recurse -Filter *.csproj | ForEach-Object {
@@ -58,29 +61,27 @@ jobs:
     - name: Publish
       run: dotnet publish --configuration Release --no-build -o ./publish
 
-    - name: Upload Artifact (Actions)
+    - name: Upload Artifact to Actions
       uses: actions/upload-artifact@v4
       with:
         name: ${{ github.event.repository.name }}-${{ env.VERSION }}
         path: ./publish
 
     - name: Zip Publish Folder
-      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      if: startsWith(github.ref, 'refs/tags/')
       run: powershell Compress-Archive -Path ./publish/* -DestinationPath "./${{ github.event.repository.name }}-${{ env.VERSION }}.zip"
 
-    - name: Upload to GitHub Release
-      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    - name: Upload zipped Artifact to Release
+      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
         files: ./${{ github.event.repository.name }}-${{ env.VERSION }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-    - name: Push NuGet to GitHub Packages
+    - name: Push NuGets to Packages
       if: startsWith(github.ref, 'refs/tags/')
       run: |
-        dotnet nuget push "**/*.nupkg" \
-          --api-key ${{ secrets.GITHUB_TOKEN }} \
+        dotnet nuget push "**/*.nupkg" `
+          --api-key ${{ secrets.PAT_TOKEN }} `
           --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-      env:
-        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
