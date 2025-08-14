@@ -83,6 +83,13 @@ jobs:
     - name: Push NuGets to Packages
       if: startsWith(github.ref, 'refs/tags/')
       run: |
-        dotnet nuget push "**/*.nupkg" `
-          --api-key ${{ secrets.PAT_TOKEN }} `
-          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+        $packages = Get-ChildItem -Path . -Recurse -Filter *.nupkg
+        if ($packages.Count -gt 0) {
+          dotnet nuget push "**/*.nupkg" `
+            --api-key ${{ secrets.PAT_TOKEN }} `
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+        }
+        else {
+          Write-Host "No NuGet-Packages were found – Step will be ignored."
+        }
+      shell: pwsh
